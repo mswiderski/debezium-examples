@@ -73,6 +73,49 @@ $ docker run -it --rm \
     -C -o beginning -q -u -t dbserver1.inventory.vegetable.enriched | jq ."
 ```
 
+## Administrate missing events
+
+There could be situations when there are missing transaction context data, for example
+when there is a manual update done on data base. In such a case the enricher will not
+be able to continue due to missing corresponding event with context data.
+
+An admin service provided here can help with fixing such situation by manually filling in
+the missing details
+
+- use case
+- user name
+
+Admin service is consuming messages from both topics and attempts to correlate them,
+in case there is no data to match within specific amount of time - 2 seconds by default it will
+create a task for administrator to provide the missing data.
+
+### List awaiting records to be fixed
+
+```console
+http http://localhost:8085/vegetables
+```
+
+In case there are any missing transaction context events there will be instances returned
+
+### Get list of tasks to provide missing data
+
+```console
+http http://localhost:8085/vegetables/{uuid}
+```
+
+`{uuid}` is taken from the `id` attribute of the instances returned in previous step.
+
+This will return name of the task `auditData` and the id of the task
+
+```console
+http POST http://localhost:8085/vegetables/{uuid}/auditData/{tuuid} audit:='{"usecase":"CREATE VEGETABLE", "user_name" : "farmerjohn"}'
+```
+
+`{uuid}` is same as in the previous call and `{tuuid}` is the id of the task returned in previous call.
+
+this would then fix the missing event in transaction context data topic and trigger the enricher to provide
+new log entry.
+
 ## Stopping All Services
 
 ```console
@@ -88,7 +131,7 @@ Start all services except the `vegetables-service` and the `log-enricher`:
 $ docker-compose up --scale vegetables-service=0 --scale log-enricher=0
 ```
 
-Then start the two services via the Quarkus dev mode:
+Then start the three services via the Quarkus dev mode:
 
 ```console
 mvn compile quarkus:dev -f vegetables-service/pom.xml
@@ -98,6 +141,13 @@ mvn compile quarkus:dev -f vegetables-service/pom.xml
 $ mvn compile quarkus:dev -f log-enricher/pom.xml \
     -Dquarkus.kafka-streams.bootstrap-servers=<IP_OF_YOUR_HOST_MACHINE>:9092 \
     -Dquarkus.http.port=8081
+```
+
+```console
+$ mvn compile quarkus:dev -f admin-service/pom.xml \
+    -Dmp.messaging.incoming.missingtransactions.bootstrap-servers=<IP_OF_YOUR_HOST_MACHINE>:9092 \
+    -Dmp.messaging.incoming.missingtransactions.bootstrap-servers=<IP_OF_YOUR_HOST_MACHINE>:9092 \
+    -Dmp.messaging.incoming.missingtransactions.bootstrap-servers=<IP_OF_YOUR_HOST_MACHINE>:9092
 ```
 
 ## Useful Commands
